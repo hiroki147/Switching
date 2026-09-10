@@ -33,7 +33,7 @@ WS_PORT = 8081
 SCREEN_W = 960
 SCREEN_H = 540
 FPS = 30
-JPEG_QUALITY = 65
+JPEG_QUALITY = 45
 
 # ============================================================
 # スティック
@@ -242,17 +242,17 @@ def trigger_value(value):
 
 button_mapping = {
 
-    # B
+    # B (下)
     0: e.BTN_EAST,
 
-    # A
+    # A (右)
     1: e.BTN_SOUTH,
 
-    # Y
-    3: e.BTN_NORTH,
-
-    # X
+    # Y (左)
     2: e.BTN_WEST,
+
+    # X (上)
+    3: e.BTN_NORTH,
 
     # L
     4: e.BTN_TL,
@@ -855,6 +855,16 @@ body {
 .tb-plus  { right: 10px; bottom: 20px; width: 48px; height: 48px; border-radius: 12px; }
 .tb-home  { left: 50%; bottom: 16px; transform: translateX(-50%); width: 52px; height: 52px; border-radius: 50%; font-size: 11px; }
 
+/* フルスクリーンボタン */
+.tb-fullscreen {
+    left: 50%; top: 16px;
+    transform: translateX(-50%);
+    width: 52px; height: 52px;
+    border-radius: 12px;
+    font-size: 22px;
+    line-height: 1;
+}
+
 </style>
 
 </head>
@@ -884,6 +894,7 @@ body {
     <div class="touch-btn tb-minus" data-btn="8">-</div>
     <div class="touch-btn tb-plus"  data-btn="9">+</div>
     <div class="touch-btn tb-home"  data-btn="16">HOME</div>
+    <div class="touch-btn tb-fullscreen" id="fs-btn">&#x26F6;</div>
 </div>
 
 
@@ -1245,16 +1256,19 @@ window.addEventListener(
 
 
 // ============================================================
-// Gamepad → WebSocket
-// ============================================================
-
-// ============================================================
 // タッチオーバーレイ（ZL/ZR/X/-/+/Home 用）
 // ============================================================
 
 const touchOverride = {}; // { buttonIndex: true/false }
 
 document.querySelectorAll(".touch-btn").forEach(function (el) {
+
+    // 補助ボタン（data-btn を持たないもの）は除外
+    if (el.dataset.btn === undefined) {
+
+        return;
+
+    }
 
     const idx = parseInt(el.dataset.btn, 10);
 
@@ -1283,6 +1297,234 @@ document.querySelectorAll(".touch-btn").forEach(function (el) {
     el.addEventListener("mouseup", function () { setPressed(false); });
     el.addEventListener("mouseleave", function () { setPressed(false); });
 });
+
+
+// ============================================================
+// フルスクリーン
+// ============================================================
+
+const fsBtn = document.getElementById("fs-btn");
+
+
+function isFullscreen() {
+
+    return !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+    );
+
+}
+
+
+function requestFullscreen() {
+
+    const el = document.documentElement;
+
+    const fn =
+        el.requestFullscreen ||
+        el.webkitRequestFullscreen ||
+        el.mozRequestFullScreen ||
+        el.msRequestFullscreen;
+
+    if (fn) {
+
+        try {
+
+            const result = fn.call(el);
+
+            if (result && result.catch) {
+
+                result.catch(function () {});
+
+            }
+
+        } catch (e) {}
+
+    }
+
+}
+
+
+function exitFullscreen() {
+
+    const fn =
+        document.exitFullscreen ||
+        document.webkitExitFullscreen ||
+        document.mozCancelFullScreen ||
+        document.msExitFullscreen;
+
+    if (fn) {
+
+        try {
+
+            const result = fn.call(document);
+
+            if (result && result.catch) {
+
+                result.catch(function () {});
+
+            }
+
+        } catch (e) {}
+
+    }
+
+}
+
+
+function updateFullscreenButton() {
+
+    if (isFullscreen()) {
+
+        fsBtn.innerHTML = "&#x2715;"; // ×
+
+    } else {
+
+        fsBtn.innerHTML = "&#x26F6;"; // ⛶
+
+    }
+
+}
+
+
+function toggleFullscreen() {
+
+    if (isFullscreen()) {
+
+        exitFullscreen();
+
+    } else {
+
+        requestFullscreen();
+
+    }
+
+    setTimeout(updateFullscreenButton, 100);
+
+}
+
+
+// タッチとマウスの二重発火防止付きバインド
+let fsRecentTouch = false;
+
+fsBtn.addEventListener(
+    "touchstart",
+    function (ev) {
+
+        ev.preventDefault();
+
+        fsRecentTouch = true;
+
+        setTimeout(
+            function () { fsRecentTouch = false; },
+            600
+        );
+
+        toggleFullscreen();
+
+    },
+    { passive: false }
+);
+
+fsBtn.addEventListener(
+    "click",
+    function (ev) {
+
+        if (fsRecentTouch) {
+
+            ev.preventDefault();
+
+            return;
+
+        }
+
+        toggleFullscreen();
+
+    }
+);
+
+
+document.addEventListener(
+    "fullscreenchange",
+    updateFullscreenButton
+);
+
+document.addEventListener(
+    "webkitfullscreenchange",
+    updateFullscreenButton
+);
+
+document.addEventListener(
+    "mozfullscreenchange",
+    updateFullscreenButton
+);
+
+document.addEventListener(
+    "MSFullscreenChange",
+    updateFullscreenButton
+);
+
+
+// ------------------------------------------------------------
+// 初回のユーザー操作で自動フルスクリーン
+// ------------------------------------------------------------
+
+let autoFullscreenDone = false;
+
+
+function autoFullscreen(ev) {
+
+    if (autoFullscreenDone) {
+
+        return;
+
+    }
+
+    autoFullscreenDone = true;
+
+    // フルスクリーンボタン自身の操作は除外
+    try {
+
+        if (
+            ev &&
+            ev.target &&
+            ev.target.closest &&
+            ev.target.closest("#fs-btn")
+        ) {
+
+            return;
+
+        }
+
+    } catch (e) {}
+
+    if (!isFullscreen()) {
+
+        requestFullscreen();
+
+    }
+
+}
+
+
+document.addEventListener(
+    "touchstart",
+    autoFullscreen,
+    { once: true }
+);
+
+document.addEventListener(
+    "click",
+    autoFullscreen,
+    { once: true }
+);
+
+
+// ============================================================
+// Gamepad → WebSocket
+// ============================================================
 
 let lastStatusTime = 0;
 
