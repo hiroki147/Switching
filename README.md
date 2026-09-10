@@ -147,7 +147,7 @@ pip install mss pillow websockets evdev
 インストール：
 
 ```powershell
-pip install mss pillow websockets vgamepad
+python -m pip install mss pillow websockets vgamepad
 ```
 
 ---
